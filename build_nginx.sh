@@ -15,7 +15,8 @@ MODULE2="modules/ngx_http_hello_module"
 # 配置并编译 Nginx
 # 指定头文件方法
 # auto/configure --add-module=modules/ngx_http_rate_limit_module  --with-cc-opt="-I/usr/local/include/hiredis" --with-ld-opt="-L/usr/local/lib -lhiredis"
+# --with-debug 打开调试模式
 
-auto/configure --add-module=$MODULE1 --add-module=$MODULE2 --with-cc-opt="-I/usr/local/include/hiredis" --with-ld-opt="-L/usr/local/lib -lhiredis"
+auto/configure --with-debug --add-module=$MODULE1 --add-module=$MODULE2 --with-cc-opt="-I/usr/local/include/hiredis" --with-ld-opt="-L/usr/local/lib -lhiredis"
 make -j10
 # sudo make install
