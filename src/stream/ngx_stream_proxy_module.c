@@ -742,6 +742,25 @@ ngx_stream_proxy_connect(ngx_stream_session_t *s)
 
     u->state->peer = u->peer.name;
 
+#if (NGX_STREAM_UPSTREAM_ZONE)
+    if (u->upstream && u->upstream->shm_zone
+        && (u->upstream->flags & NGX_STREAM_UPSTREAM_MODIFY))
+    {
+        u->state->peer = ngx_palloc(s->connection->pool,
+                                    sizeof(ngx_str_t) + u->peer.name->len);
+        if (u->state->peer == NULL) {
+            ngx_stream_proxy_finalize(s, NGX_STREAM_INTERNAL_SERVER_ERROR);
+            return;
+        }
+
+        u->state->peer->len = u->peer.name->len;
+        u->state->peer->data = (u_char *) (u->state->peer + 1);
+        ngx_memcpy(u->state->peer->data, u->peer.name->data, u->peer.name->len);
+
+        u->peer.name = u->state->peer;
+    }
+#endif
+
     if (rc == NGX_BUSY) {
         ngx_log_error(NGX_LOG_ERR, c->log, 0, "no live upstreams");
         ngx_stream_proxy_finalize(s, NGX_STREAM_BAD_GATEWAY);
@@ -2162,12 +2181,16 @@ ngx_stream_proxy_merge_srv_conf(ngx_conf_t *cf, void *parent, void *child)
     ngx_conf_merge_value(conf->ssl_session_reuse,
                               prev->ssl_session_reuse, 1);
 
+#ifndef SSL_OP_NO_TLSv1_2
     ngx_conf_merge_bitmask_value(conf->ssl_protocols, prev->ssl_protocols,
                               (NGX_CONF_BITMASK_SET
-#ifndef SSL_OP_NO_TLSv1_2
                                |NGX_SSL_TLSv1|NGX_SSL_TLSv1_1
-#endif
                                |NGX_SSL_TLSv1_2|NGX_SSL_TLSv1_3));
+#else
+    ngx_conf_merge_bitmask_value(conf->ssl_protocols, prev->ssl_protocols,
+                              (NGX_CONF_BITMASK_SET
+                               |NGX_SSL_TLSv1_2|NGX_SSL_TLSv1_3));
+#endif
 
     ngx_conf_merge_str_value(conf->ssl_ciphers, prev->ssl_ciphers, "DEFAULT");
 

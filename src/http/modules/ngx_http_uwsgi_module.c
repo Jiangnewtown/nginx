@@ -1511,6 +1511,28 @@ ngx_http_uwsgi_create_loc_conf(ngx_conf_t *cf)
         return NULL;
     }
 
+    /*
+     * set by ngx_pcalloc():
+     *
+     *     conf->upstream.bufs.num = 0;
+     *     conf->upstream.ignore_headers = 0;
+     *     conf->upstream.next_upstream = 0;
+     *     conf->upstream.cache_zone = NULL;
+     *     conf->upstream.cache_use_stale = 0;
+     *     conf->upstream.cache_methods = 0;
+     *     conf->upstream.temp_path = NULL;
+     *     conf->upstream.hide_headers_hash = { NULL, 0 };
+     *     conf->upstream.store_lengths = NULL;
+     *     conf->upstream.store_values = NULL;
+     *
+     *     conf->uwsgi_string = { 0, NULL };
+     *     conf->ssl = 0;
+     *     conf->ssl_protocols = 0;
+     *     conf->ssl_ciphers = { 0, NULL };
+     *     conf->ssl_trusted_certificate = { 0, NULL };
+     *     conf->ssl_crl = { 0, NULL };
+     */
+
     conf->modifier1 = NGX_CONF_UNSET_UINT;
     conf->modifier2 = NGX_CONF_UNSET_UINT;
 
@@ -1877,12 +1899,16 @@ ngx_http_uwsgi_merge_loc_conf(ngx_conf_t *cf, void *parent, void *child)
     ngx_conf_merge_value(conf->upstream.ssl_session_reuse,
                               prev->upstream.ssl_session_reuse, 1);
 
+#ifndef SSL_OP_NO_TLSv1_2
     ngx_conf_merge_bitmask_value(conf->ssl_protocols, prev->ssl_protocols,
                                  (NGX_CONF_BITMASK_SET
-#ifndef SSL_OP_NO_TLSv1_2
                                   |NGX_SSL_TLSv1|NGX_SSL_TLSv1_1
-#endif
                                   |NGX_SSL_TLSv1_2|NGX_SSL_TLSv1_3));
+#else
+    ngx_conf_merge_bitmask_value(conf->ssl_protocols, prev->ssl_protocols,
+                                 (NGX_CONF_BITMASK_SET
+                                  |NGX_SSL_TLSv1_2|NGX_SSL_TLSv1_3));
+#endif
 
     ngx_conf_merge_str_value(conf->ssl_ciphers, prev->ssl_ciphers,
                              "DEFAULT");
