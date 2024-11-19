@@ -2,16 +2,9 @@
 
 # Nginx 源代码和安装路径配置
 NGINX_SRC=${NGINX_SRC:-"./"}
-# NGINX_PREFIX=${NGINX_PREFIX:-"/usr/local/nginx"}
-# NGINX_CONF_PATH=${NGINX_CONF_PATH:-"/etc/nginx"}
-# NGINX_USER=${NGINX_USER:-"nginx"}
-# NGINX_GROUP=${NGINX_GROUP:-"nginx"}
-# NGINX_LOGS_PATH=${NGINX_LOGS_PATH:-"/var/log/nginx"}
-# NGINX_PID_PATH=${NGINX_PID_PATH:-"/var/run/nginx"}
-# NGINX_LOCK_PATH=${NGINX_LOCK_PATH:-"/var/lock/nginx"}
 
 # 第三方库配置
-HIREDIS_INCLUDE=${HIREDIS_INCLUDE:-"/usr/local/include/hiredis"}
+HIREDIS_INCLUDE=${HIREDIS_INCLUDE:-"/usr/include/hiredis"}
 HIREDIS_LIB=${HIREDIS_LIB:-"/usr/local/lib"}
 
 # 自定义模块配置
@@ -41,6 +34,10 @@ WITH_FILE_AIO=${WITH_FILE_AIO:-"yes"}
 CLEAN_BEFORE_BUILD=${CLEAN_BEFORE_BUILD:-"no"}
 BACKUP_OLD_NGINX=${BACKUP_OLD_NGINX:-"yes"}
 
+# 缓存文件路径
+CACHE_FILE=".build_cache"
+CONFIGURED_FILE=".configured"
+
 # 错误处理函数
 error_exit() {
     echo "错误: $1" >&2
@@ -49,6 +46,11 @@ error_exit() {
 
 # 检查必要条件
 check_prerequisites() {
+    if [ "$FORCE_CHECK" != "yes" ] && [ -f "$CACHE_FILE" ]; then
+        echo "已检测到缓存文件，跳过环境检查。"
+        return
+    fi
+
     # 检查必要的命令
     command -v make >/dev/null 2>&1 || error_exit "未找到 make 命令，请先安装"
     command -v gcc >/dev/null 2>&1 || error_exit "未找到 gcc 命令，请先安装"
@@ -78,6 +80,9 @@ check_prerequisites() {
     if [ ! -d "$HIREDIS_LIB" ]; then
         error_exit "hiredis 库文件目录不存在: $HIREDIS_LIB"
     fi
+
+    # 创建缓存文件
+    touch "$CACHE_FILE"
 }
 
 # 显示帮助信息
@@ -95,6 +100,8 @@ show_help() {
     --prefix=PATH          设置安装路径
     --no-ssl               禁用 SSL 支持
     --no-http2             禁用 HTTP/2 支持
+    --force-check          强制重新检查环境
+    --skip-configure       跳过配置步骤
     
 环境变量:
     NGINX_SRC              Nginx 源码路径
@@ -135,6 +142,14 @@ parse_args() {
                 NGINX_PREFIX="${1#*=}"
                 shift
                 ;;
+            --force-check)
+                FORCE_CHECK="yes"
+                shift
+                ;;
+            --skip-configure)
+                SKIP_CONFIGURE="yes"
+                shift
+                ;;
             *)
                 echo "未知选项: $1"
                 show_help
@@ -155,16 +170,6 @@ backup_nginx() {
 # 构建配置参数
 build_configure_args() {
     local configure_args=""
-    
-    # 添加基础配置
-    # configure_args="--prefix=$NGINX_PREFIX"
-    # configure_args+=" --conf-path=$NGINX_CONF_PATH/nginx.conf"
-    # configure_args+=" --user=$NGINX_USER"
-    # configure_args+=" --group=$NGINX_GROUP"
-    # configure_args+=" --error-log-path=$NGINX_LOGS_PATH/error.log"
-    # configure_args+=" --http-log-path=$NGINX_LOGS_PATH/access.log"
-    # configure_args+=" --pid-path=$NGINX_PID_PATH/nginx.pid"
-    # configure_args+=" --lock-path=$NGINX_LOCK_PATH/nginx.lock"
     
     # 添加功能模块
     [ "$DEBUG_MODE" = "yes" ] && configure_args+=" --with-debug"
@@ -198,6 +203,7 @@ clean_build() {
         echo "清理构建目录..."
         make clean >/dev/null 2>&1
         rm -f Makefile objs/Makefile
+        rm -f "$CONFIGURED_FILE"
     fi
 }
 
@@ -215,14 +221,20 @@ main() {
     # 清理构建目录
     clean_build
     
-    # 获取配置参数
-    local configure_args
-    configure_args=$(build_configure_args)
-    
     # 配置
-    echo "开始配置 Nginx..."
-    echo "配置参数: $configure_args"
-    eval "./auto/configure $configure_args" || error_exit "配置失败"
+    if [ "$SKIP_CONFIGURE" != "yes" ] && [ ! -f "$CONFIGURED_FILE" ]; then
+        local configure_args
+        configure_args=$(build_configure_args)
+        
+        echo "开始配置 Nginx..."
+        echo "配置参数: $configure_args"
+        eval "./auto/configure $configure_args" || error_exit "配置失败"
+        
+        # 创建标记文件
+        touch "$CONFIGURED_FILE"
+    else
+        echo "跳过配置步骤。"
+    fi
     
     # 编译
     echo "开始编译 Nginx..."

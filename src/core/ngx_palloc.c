@@ -1,4 +1,3 @@
-
 /*
  * Copyright (C) Igor Sysoev
  * Copyright (C) Nginx, Inc.
@@ -24,6 +23,8 @@ ngx_create_pool(size_t size, ngx_log_t *log)
     if (p == NULL) {
         return NULL;
     }
+
+    ngx_log_error(NGX_LOG_INFO, log, 0, "创建内存池，大小为 %uz", size);
 
     p->d.last = (u_char *) p + sizeof(ngx_pool_t);
     p->d.end = (u_char *) p + size;
@@ -122,6 +123,8 @@ ngx_reset_pool(ngx_pool_t *pool)
 void *
 ngx_palloc(ngx_pool_t *pool, size_t size)
 {
+    ngx_log_error(NGX_LOG_INFO, pool->log, 0, "从内存池分配 %uz 字节", size);
+
 #if !(NGX_DEBUG_PALLOC)
     if (size <= pool->max) {
         return ngx_palloc_small(pool, size, 1);
@@ -162,7 +165,7 @@ ngx_palloc_small(ngx_pool_t *pool, size_t size, ngx_uint_t align)
 
         if ((size_t) (p->d.end - m) >= size) {
             p->d.last = m + size;
-
+            ngx_log_error(NGX_LOG_INFO, pool->log, 0, "从小块内存池分配 %uz 字节", size);
             return m;
         }
 
@@ -198,6 +201,8 @@ ngx_palloc_block(ngx_pool_t *pool, size_t size)
     m = ngx_align_ptr(m, NGX_ALIGNMENT);
     new->d.last = m + size;
 
+    ngx_log_error(NGX_LOG_INFO, pool->log, 0, "分配新内存块，大小为 %uz", psize);
+
     for (p = pool->current; p->d.next; p = p->d.next) {
         if (p->d.failed++ > 4) {
             pool->current = p->d.next;
@@ -227,6 +232,7 @@ ngx_palloc_large(ngx_pool_t *pool, size_t size)
     for (large = pool->large; large; large = large->next) {
         if (large->alloc == NULL) {
             large->alloc = p;
+            ngx_log_error(NGX_LOG_INFO, pool->log, 0, "重用大块内存，大小为 %uz", size);
             return p;
         }
 
@@ -244,6 +250,8 @@ ngx_palloc_large(ngx_pool_t *pool, size_t size)
     large->alloc = p;
     large->next = pool->large;
     pool->large = large;
+
+    ngx_log_error(NGX_LOG_INFO, pool->log, 0, "分配大块内存，大小为 %uz", size);
 
     return p;
 }
